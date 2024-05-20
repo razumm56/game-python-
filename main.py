@@ -3,6 +3,7 @@ import numpy as np
 from numba import njit
 
 
+# хуй
 def main():
     pg.init()
     pg.display.set_caption("Dead and - A Python game by FinFET, thanks for playing!")
