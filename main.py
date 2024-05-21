@@ -724,7 +724,7 @@ def load_sounds():
     sounds['died'] = pg.mixer.Sound('Assets/Sounds/died.wav')
     sounds['won'] = pg.mixer.Sound('Assets/Sounds/won.wav')
     sounds['music0'] = pg.mixer.Sound('Assets/Sounds/Y2mate.mx - Attack on titan- battle theme (128 kbps).mp3')
-    sounds['music1'] = pg.mixer.Sound('Assets/Sounds/theme.mp3')
+    sounds['music1'] = pg.mixer.Sound('Assets/Sounds/win.mp3')
 
     return sounds
 

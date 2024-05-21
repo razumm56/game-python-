@@ -77,6 +77,8 @@ def movement(posx, posy, rot, keys, et):
     if keys[pg.K_DOWN] or keys[ord('s')]:
         posx, posy = posx - np.cos(rot) * 0.002 * et, posy - np.sin(rot) * 0.002 * et
 
+
+
     return posx, posy, rot
 
 
