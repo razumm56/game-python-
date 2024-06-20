@@ -13,12 +13,12 @@ def main():
     halfvres = 100  # vertical resolution/2
 
     mod = hres / 60  # scaling factor (60° fov)
-    posx, posy, rot = 0, 0, 0
+    pos_x, pos_y, rot = 0, 0, 0
     frame = np.random.uniform(0, 1, (hres, halfvres * 2, 3))
-    sky = pg.image.load('skybox0.jpg')
+    sky = pg.image.load('Assets/Textures/skybox0.jpg')
     sky = pg.surfarray.array3d(pg.transform.scale(sky, (360, halfvres * 2))) / 255
-    floor = pg.surfarray.array3d(pg.image.load('floor.jpg')) / 255
-    sprite = pg.image.load('./Sprites/colonel1.png')
+    floor = pg.surfarray.array3d(pg.image.load('Assets/Textures/floor.jpg')) / 255
+    sprite = pg.image.load('Assets/Sprites/gun2.png')
     sprize = np.asarray(sprite.get_size())
     enemies = np.random.uniform(0, 50, (100, 4))
 
@@ -28,19 +28,19 @@ def main():
             if event.type == pg.QUIT or event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
                 running = False
 
-        frame = new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod)
+        frame = new_frame(pos_x, pos_y, rot, frame, sky, floor, hres, halfvres, mod)
 
         surf = pg.surfarray.make_surface(frame * 255)
         surf = pg.transform.scale(surf, (800, 600))
 
         for en in range(100):
             enx, eny = enemies[en][0], enemies[en][1]
-            angle = np.arctan((eny - posy) / (enx - posx))
-            if abs(posx + np.cos(angle) - enx) > abs(posx - enx):
+            angle = np.arctan((eny - pos_y) / (enx - pos_x))
+            if abs(pos_x + np.cos(angle) - enx) > abs(pos_x - enx):
                 angle = (angle - np.pi) % (2 * np.pi)
             anglediff = (rot - angle) % (2 * np.pi)
             if anglediff > 11 * np.pi / 6 or anglediff < np.pi / 6:
-                dist = np.sqrt((posx - enx) ** 2 + (posy - eny) ** 2)
+                dist = np.sqrt((pos_x - enx) ** 2 + (pos_y - eny) ** 2)
                 enemies[en][2], enemies[en][3] = anglediff, 1 / dist
             else:
                 enemies[en][3] = 999
@@ -61,10 +61,10 @@ def main():
         screen.blit(surf, (0, 0))
         pg.display.update()
 
-        posx, posy, rot = movement(posx, posy, rot, pg.key.get_pressed(), clock.tick())
+        pos_x, pos_y, rot = movement(pos_x, pos_y, rot, pg.key.get_pressed(), clock.tick())
 
 
-def movement(posx, posy, rot, keys, et):
+def movement(pos_x, pos_y, rot, keys, et):
     if keys[pg.K_LEFT] or keys[ord('a')]:
         rot = rot - 0.001 * et
 
@@ -72,25 +72,25 @@ def movement(posx, posy, rot, keys, et):
         rot = rot + 0.001 * et
 
     if keys[pg.K_UP] or keys[ord('w')]:
-        posx, posy = posx + np.cos(rot) * 0.002 * et, posy + np.sin(rot) * 0.002 * et
+        pos_x, pos_y = pos_x + np.cos(rot) * 0.002 * et, pos_y + np.sin(rot) * 0.002 * et
 
     if keys[pg.K_DOWN] or keys[ord('s')]:
-        posx, posy = posx - np.cos(rot) * 0.002 * et, posy - np.sin(rot) * 0.002 * et
+        pos_x, pos_y = pos_x - np.cos(rot) * 0.002 * et, pos_y - np.sin(rot) * 0.002 * et
 
 
 
-    return posx, posy, rot
+    return pos_x, pos_y, rot
 
 
 @njit()
-def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod):
+def new_frame(pos_x, pos_y, rot, frame, sky, floor, hres, halfvres, mod):
     for i in range(hres):
         rot_i = rot + np.deg2rad(i / mod - 30)
         sin, cos, cos2 = np.sin(rot_i), np.cos(rot_i), np.cos(np.deg2rad(i / mod - 30))
         frame[i][:] = sky[int(np.rad2deg(rot_i) % 359)][:]
         for j in range(halfvres):
             n = (halfvres / (halfvres - j)) / cos2
-            x, y = posx + cos * n, posy + sin * n
+            x, y = pos_x + cos * n, pos_y + sin * n
             xx, yy = int(x * 2 % 1 * 99), int(y * 2 % 1 * 99)
 
             shade = 0.2 + 0.8 * (1 - j / halfvres)

@@ -1,6 +1,7 @@
 import pygame as pg
 import numpy as np
 from numba import njit
+from player import Player, check_walls
 
 
 def main():
@@ -61,7 +62,7 @@ def main():
         pg.display.update()
         ticks = pg.time.get_ticks() / 200
         er = min(clock.tick() / 500, 0.3)
-        if not pause and (player_health <= 0 or (exit2 == 0 and int(posx) == exitx and int(posy) == exity)):
+        if not pause and (player_health <= 0 or (exit2 == 0 and int(pos_x) == exitx and int(pos_y) == exity)):
             msg = ' '
             if player_health <= 0:
                 sounds['died'].play()
@@ -144,13 +145,13 @@ def main():
                 msg = 'Kill the monsters!'
 
                 if story:
-                    posx, posy, rot, rotv, maph, mapc, exitx, exity, stepscount, size = load_map(level)
+                    pos_x, pos_y, rot, rotv, maph, mapc, exitx, exity, stepscount, size = load_map(level)
                     nlevel = level_textures[level]
 
                 else:
                     size = np.random.randint(10 + level * 2, 16 + level * 2)
                     nenemies = size  # number of enemies
-                    posx, posy, rot, rotv, maph, mapc, exitx, exity, stepscount = gen_map(size)
+                    pos_x, pos_y, rot, rotv, maph, mapc, exitx, exity, stepscount = gen_map(size)
                     nlevel = [np.random.randint(0, 3),  # sky1
                               np.random.randint(0, 4),  # floorwall
                               np.random.randint(0, 3),  # wall
@@ -163,7 +164,7 @@ def main():
                 sprites, spsize, sword, swordsp = get_sprites(nlevel[5])
                 sky1, floor, wall, bwall, door, window = load_textures(nlevel)
                 sky = pg.surfarray.array3d(pg.transform.smoothscale(sky1, (720, halfvres * 4)))  # /255
-                enemies = spawn_enemies(nenemies, maph, size, posx, posy, level / 2)
+                enemies = spawn_enemies(nenemies, maph, size, pos_x, pos_y, level / 2)
                 hearts2 = pg.Surface.subsurface(hearts, (0, 0, player_health * 10, 20))
                 exit2, damage_mod = 1, 1
 
@@ -173,7 +174,7 @@ def main():
 
         else:
             timer = timer + er / 2
-            frame = new_frame(posx - 0.2 * np.cos(rot), posy - 0.2 * np.sin(rot), rot, frame, sky, floor, hres,
+            frame = new_frame(pos_x - 0.2 * np.cos(rot), pos_y - 0.2 * np.sin(rot), rot, frame, sky, floor, hres,
                               halfvres,
                               mod, maph, size, wall, mapc, exitx, exity, nenemies, rotv, door, window, bwall, exit2)
 
@@ -181,11 +182,11 @@ def main():
 
             mape = np.zeros((size, size))
             health = player_health
-            enemies, player_health, mape = enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks,
+            enemies, player_health, mape = enemies_ai(pos_x, pos_y, enemies, maph, size, mape, swordsp, ticks,
                                                       player_health, nenemies, level / 3)
-            enemies = sort_sprites(posx - 0.2 * np.cos(rot), posy - 0.2 * np.sin(rot), rot, enemies, maph, size, er / 3)
+            enemies = sort_sprites(pos_x - 0.2 * np.cos(rot), pos_y - 0.2 * np.sin(rot), rot, enemies, maph, size, er / 3)
             if exit2 == 0:
-                surf = draw_colonel(surf, colonel, posx - 0.2 * np.cos(rot), posy - 0.2 * np.sin(rot), exitx + 0.5,
+                surf = draw_colonel(surf, colonel, pos_x - 0.2 * np.cos(rot), pos_y - 0.2 * np.sin(rot), exitx + 0.5,
                                     exity + 0.5,
                                     hres, halfvres, rot, rotv, maph, size)
             surf, en = draw_sprites(surf, sprites, enemies, spsize, hres, halfvres, ticks, sword, swordsp, rotv)
@@ -195,11 +196,11 @@ def main():
             surf.blit(hearts2, (20, 20))
 
             if exit2 == 0:
-                minimap[int(posx)][int(posy)] = (50, 50, 255)
+                minimap[int(pos_x)][int(pos_y)] = (50, 50, 255)
                 surfmap = pg.surfarray.make_surface(minimap.astype('uint8'))
                 surfmap = pg.transform.scale(surfmap, (size * 5, size * 5))
                 surf.blit(surfmap, (20, 50), special_flags=pg.BLEND_ADD)
-                minimap[int(posx)][int(posy)] = (100, 100, 0)
+                minimap[int(pos_x)][int(pos_y)] = (100, 100, 0)
 
             surf.blit(font.render(str(round(timer, 1)), 1, (255, 255, 255)), (20, 525))
             surf.blit(exits[exit2], (730, 20))
@@ -209,13 +210,13 @@ def main():
                 hearts2 = pg.Surface.subsurface(hearts, (0, 0, player_health * 10, 20))
                 sounds['hurt'].play()
 
-            if ticks - stepdelay > 2 and stepscount != posx + posy:
+            if ticks - stepdelay > 2 and stepscount != pos_x + pos_y:
                 sounds['step'].play()
                 stepdelay = ticks
-            stepscount = posx + posy
+            stepscount = pos_x + pos_y
 
-            if mape[int(posx)][int(posy)] > 0:
-                delaycontrol = max(0.3, 2 / np.random.uniform(0.99, mape[int(posx)][int(posy)]))
+            if mape[int(pos_x)][int(pos_y)] > 0:
+                delaycontrol = max(0.3, 2 / np.random.uniform(0.99, mape[int(pos_x)][int(pos_y)]))
                 if ticks - stepdelay2 > delaycontrol:
                     sounds['step2'].play()
                     stepdelay2 = ticks
@@ -257,11 +258,12 @@ def main():
             pg.display.set_caption(
                 "Health: " + str(round(player_health, 1)) + " Enemies: " + str(nenemies) + " FPS: " + str(
                     fps) + ' ' + msg)
-            posx, posy, rot, rotv = movement(pg.key.get_pressed(), posx, posy, rot, maph, er, rotv)
+            pos_x, pos_y, rot, rotv = movement(pg.key.get_pressed(), pos_x, pos_y, rot, maph, er, rotv)
 
 
-def movement(pressed_keys, posx, posy, rot, maph, et, rotv):
-    x, y, diag = posx, posy, 0
+
+def movement(pressed_keys, pos_x, pos_y, rot, maph, et, rotv):
+    x, y, diag = pos_x, pos_y, 0
     if pg.mouse.get_focused():
         p_mouse = pg.mouse.get_rel()
         rot = rot + np.clip((p_mouse[0]) / 200, -0.2, .2)
@@ -282,9 +284,9 @@ def movement(pressed_keys, posx, posy, rot, maph, et, rotv):
         et = et / (diag + 1)
         x, y = x - et * np.sin(rot), y + et * np.cos(rot)
 
-    posx, posy = check_walls(posx, posy, maph, x, y)
+    pos_x, pos_y = check_walls(pos_x, pos_y, maph, x, y)
 
-    return posx, posy, rot, rotv
+    return pos_x, pos_y, rot, rotv
 
 
 def gen_map(size):
@@ -294,9 +296,9 @@ def gen_map(size):
     maph[size - 1, :] = np.random.choice([1, 2, 3, 4], size)
     maph[:, 0] = np.random.choice([1, 2, 3, 4], size)
     maph[:, size - 1] = np.random.choice([1, 2, 3, 4], size)
-    posx, posy = np.random.randint(1, size - 2) + 0.5, np.random.randint(1, size - 2) + 0.5
-    rot, rotv, stepscount = np.pi / 4, 0, posx + posy
-    x, y = int(posx), int(posy)
+    pos_x, pos_y = np.random.randint(1, size - 2) + 0.5, np.random.randint(1, size - 2) + 0.5
+    rot, rotv, stepscount = np.pi / 4, 0, pos_x + pos_y
+    x, y = int(pos_x), int(pos_y)
     maph[x][y] = 0
     count = 0
     while True:
@@ -310,14 +312,14 @@ def gen_map(size):
                 count = 0
                 x, y = (testx, testy)
                 maph[x][y] = 0
-                dtx = np.sqrt((x - posx) ** 2 + (y - posy) ** 2)
+                dtx = np.sqrt((x - pos_x) ** 2 + (y - pos_y) ** 2)
                 if (dtx > size * .6 and np.random.uniform() > .999) or np.random.uniform() > .99999:
                     exitx, exity = (x, y)
                     break
             else:
                 count = count + 1
 
-    return posx, posy, rot, rotv, maph, mapc, exitx, exity, stepscount
+    return pos_x, pos_y, rot, rotv, maph, mapc, exitx, exity, stepscount
 
 
 def load_map(level):
@@ -325,34 +327,34 @@ def load_map(level):
     size = len(mapc)
     maph = np.random.choice([1, 2, 3, 4], (size, size))
     colors = np.asarray([[0, 0, 0], [255, 255, 255], [127, 127, 127]])
-    posx, exitx = None, None
+    pos_x, exitx = None, None
     for i in range(size):
         for j in range(size):
             color = mapc[i][j]
             if (color == colors[0]).all() or (color == colors[1]).all() or (color == colors[2]).all():
                 maph[i][j] = 0
                 if (color == colors[1]).all():
-                    posx, posy = i + 0.5, j + 0.5
+                    pos_x, pos_y = i + 0.5, j + 0.5
                 if (color == colors[2]).all():
                     exitx, exity = i, j
 
-    while posx == None:  # if no start is found
+    while pos_x == None:  # if no start is found
         x, y = np.random.randint(1, size), np.random.randint(1, size)
         if (mapc[x][y] == colors[0]).all():
-            posx, posy = x + 0.5, y + 0.5
+            pos_x, pos_y = x + 0.5, y + 0.5
 
     while exitx == None:  # if no exit is found
         x, y = np.random.randint(1, size), np.random.randint(1, size)
         if (mapc[x][y] == colors[0]).all():
             exitx, exity = x, y
 
-    rot, rotv, stepscount = np.pi / 4, 0, posx + posy
+    rot, rotv, stepscount = np.pi / 4, 0, pos_x + pos_y
 
-    return posx, posy, rot, rotv, maph, mapc / 255, exitx, exity, stepscount, size
+    return pos_x, pos_y, rot, rotv, maph, mapc / 255, exitx, exity, stepscount, size
 
 
 @njit(cache=True)
-def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod, maph, size, wall, mapc,
+def new_frame(pos_x, pos_y, rot, frame, sky, floor, hres, halfvres, mod, maph, size, wall, mapc,
               exitx, exity, nenemies, rotv, door, window, bwall, exit2):
     offset = -int(halfvres * rotv)
     for i in range(hres):
@@ -362,13 +364,13 @@ def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod, maph, siz
 
         n = 0
         n2 = 0
-        x, y = posx + 0.2 * cos, posy + 0.2 * sin
+        x, y = pos_x + 0.2 * cos, pos_y + 0.2 * sin
         for j in range(2000):
             x, y = x + 0.01 * cos, y + 0.01 * sin
             if n == 0 and maph[int(x) % (size - 1)][int(y) % (size - 1)] != 0:  # found lower wall
-                n = np.sqrt((x - posx) ** 2 + (y - posy) ** 2)
+                n = np.sqrt((x - pos_x) ** 2 + (y - pos_y) ** 2)
             if maph[int(x) % (size - 1)][int(y) % (size - 1)] == 2:  # found upper wall
-                n2 = np.sqrt((x - posx) ** 2 + (y - posy) ** 2)
+                n2 = np.sqrt((x - pos_x) ** 2 + (y - pos_y) ** 2)
                 h = halfvres / (n2 * cos2 + 0.001)
                 break
         cwall = wall
@@ -403,7 +405,7 @@ def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod, maph, siz
 
         if n == 0:
             n = 1000
-        x, y = posx + n * cos, posy + n * sin
+        x, y = pos_x + n * cos, pos_y + n * sin
         walltype = maph[int(x) % (size - 1)][int(y) % (size - 1)]
         cwall = wall
         if n > 3.5:
@@ -453,7 +455,7 @@ def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod, maph, siz
 
         for j in range(int(halfvres - h - offset)):  # floor
             n = (halfvres / (halfvres - j - offset)) / cos2
-            x, y = posx + cos * n, posy + sin * n
+            x, y = pos_x + cos * n, pos_y + sin * n
             xx, yy = int(x * 3 % 1 * 99), int(y * 3 % 1 * 99)
 
             shade = min(0.2 + 0.8 / n, 1)
@@ -473,8 +475,8 @@ def new_frame(posx, posy, rot, frame, sky, floor, hres, halfvres, mod, maph, siz
 
 
 @njit(cache=True)
-def vision(posx, posy, enx, eny, dist2p, maph, size):
-    cos, sin = (posx - enx) / dist2p, (posy - eny) / dist2p
+def check_visibility(pos_x, pos_y, enx, eny, dist2p, maph, size):
+    cos, sin = (pos_x - enx) / dist2p, (pos_y - eny) / dist2p
     x, y = enx, eny
     seen = 1
     x, y = x + 0.25 * cos, y + 0.25 * sin
@@ -490,16 +492,16 @@ def vision(posx, posy, enx, eny, dist2p, maph, size):
 
 
 @njit(cache=True)
-def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_health, nenemies, level=0):
+def enemies_ai(pos_x, pos_y, enemies, maph, size, mape, swordsp, ticks, player_health, nenemies, level=0):
     if nenemies < 5:  # teleport far enemies closer
         for en in range(len(enemies)):  # mape = enemies heatmap
             if enemies[en][8] > 0:
                 enx, eny = enemies[en][0], enemies[en][1]
-                dist2p = np.sqrt((enx - posx) ** 2 + (eny - posy) ** 2 + 1e-16)
+                dist2p = np.sqrt((enx - pos_x) ** 2 + (eny - pos_y) ** 2 + 1e-16)
                 if dist2p > 10:
                     for i in range(10):
                         x, y = np.random.randint(1, size), np.random.randint(1, size)
-                        dist2p = np.sqrt((x + 0.5 - posx) ** 2 + (y + 0.5 - posy) ** 2 + 1e-16)
+                        dist2p = np.sqrt((x + 0.5 - pos_x) ** 2 + (y + 0.5 - pos_y) ** 2 + 1e-16)
                         if dist2p > 6 and dist2p < 8 and maph[x][y] == 0:
                             enemies[en][0], enemies[en][1] = x + 0.5, y + 0.5
                             break
@@ -513,11 +515,11 @@ def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_hea
         if enemies[en][8] > 0 and np.random.uniform(0, 1) < 0.1:  # update only % of the time
             enx, eny, angle = enemies[en][0], enemies[en][1], enemies[en][6]
             health, state, cooldown = enemies[en][8], enemies[en][9], enemies[en][10]
-            dist2p = np.sqrt((enx - posx) ** 2 + (eny - posy) ** 2 + 1e-16)
+            dist2p = np.sqrt((enx - pos_x) ** 2 + (eny - pos_y) ** 2 + 1e-16)
 
             friends = mape[int(enx)][int(eny)] - 1
             if dist2p > 1.42:  # add friends near the player if not too close
-                friends = friends + mape[int(posx)][int(posy)]
+                friends = friends + mape[int(pos_x)][int(pos_y)]
 
             not_afraid = 0
             # zombies are less afraid
@@ -525,10 +527,10 @@ def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_hea
                 not_afraid = 1
 
             if state == 0 and dist2p < 6:  # normal
-                angle = angle2p(enx, eny, posx, posy)
+                angle = calculate_angle(enx, eny, pos_x, pos_y)
                 angle2 = (enemies[en][6] - angle) % (2 * np.pi)
                 if angle2 > 11 * np.pi / 6 or angle2 < np.pi / 6 or (swordsp >= 1 and dist2p < 3):  # in fov or heard
-                    if vision(posx, posy, enx, eny, dist2p, maph, size):
+                    if check_visibility(pos_x, pos_y, enx, eny, dist2p, maph, size):
                         if not_afraid and ticks - cooldown > 5:
                             state = 1  # turn aggressive
                         elif dist2p < 2:
@@ -541,10 +543,10 @@ def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_hea
                 if dist2p < 0.8 and ticks - cooldown > 10:  # perform attack, 2s cooldown
                     enemies[en][10] = ticks  # reset cooldown, damage is lower with more enemies on same cell
                     player_health = player_health - np.random.uniform(0.1, 1 + level / 3) / np.sqrt(
-                        1 + mape[int(posx)][int(posy)])
+                        1 + mape[int(pos_x)][int(pos_y)])
                     state = 2
                 if not_afraid:  # turn to player
-                    angle = angle2p(enx, eny, posx, posy)
+                    angle = calculate_angle(enx, eny, pos_x, pos_y)
                 else:  # retreat
                     state = 2
 
@@ -552,7 +554,7 @@ def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_hea
                 if not_afraid and ticks - cooldown > 5:
                     state = 0
                 else:
-                    angle = angle2p(posx, posy, enx, eny) + np.random.uniform(-0.5, 0.5)  # turn around
+                    angle = calculate_angle(pos_x, pos_y, enx, eny) + np.random.uniform(-0.5, 0.5)  # turn around
 
             enemies[en][6], enemies[en][9] = angle + np.random.uniform(-0.2, 0.2), state
 
@@ -560,32 +562,32 @@ def enemies_ai(posx, posy, enemies, maph, size, mape, swordsp, ticks, player_hea
 
 
 @njit(cache=True)
-def check_walls(posx, posy, maph, x, y):  # for walking
+def check_walls(pos_x, pos_y, maph, x, y):  # for walking
     if not (maph[int(x - 0.2)][int(y)] or maph[int(x + 0.2)][int(y)] or  # check all sides
             maph[int(x)][int(y - 0.2)] or maph[int(x)][int(y + 0.2)]):
-        posx, posy = x, y
+        pos_x, pos_y = x, y
 
-    elif not (maph[int(posx - 0.2)][int(y)] or maph[int(posx + 0.2)][int(y)] or  # move only in y
-              maph[int(posx)][int(y - 0.2)] or maph[int(posx)][int(y + 0.2)]):
-        posy = y
+    elif not (maph[int(pos_x - 0.2)][int(y)] or maph[int(pos_x + 0.2)][int(y)] or  # move only in y
+              maph[int(pos_x)][int(y - 0.2)] or maph[int(pos_x)][int(y + 0.2)]):
+        pos_y = y
 
-    elif not (maph[int(x - 0.2)][int(posy)] or maph[int(x + 0.2)][int(posy)] or  # move only in x
-              maph[int(x)][int(posy - 0.2)] or maph[int(x)][int(posy + 0.2)]):
-        posx = x
+    elif not (maph[int(x - 0.2)][int(pos_y)] or maph[int(x + 0.2)][int(pos_y)] or  # move only in x
+              maph[int(x)][int(pos_y - 0.2)] or maph[int(x)][int(pos_y + 0.2)]):
+        pos_x = x
 
-    return posx, posy
+    return pos_x, pos_y
 
 
 @njit(cache=True)
-def angle2p(posx, posy, enx, eny):
-    angle = np.arctan((eny - posy) / (enx - posx + 1e-16))
-    if abs(posx + np.cos(angle) - enx) > abs(posx - enx):
+def calculate_angle(pos_x, pos_y, enx, eny):
+    angle = np.arctan((eny - pos_y) / (enx - pos_x + 1e-16))
+    if abs(pos_x + np.cos(angle) - enx) > abs(pos_x - enx):
         angle = (angle - np.pi) % (2 * np.pi)
     return angle
 
 
 @njit(cache=True)
-def sort_sprites(posx, posy, rot, enemies, maph, size, er):
+def sort_sprites(pos_x, pos_y, rot, enemies, maph, size, er):
     for en in range(len(enemies)):
         enemies[en][3] = 9999
         if enemies[en][8] > 0:  # dont bother with the dead
@@ -609,28 +611,28 @@ def sort_sprites(posx, posy, rot, enemies, maph, size, er):
                     enemies[en][9] = 0  # return to normal state
             enemies[en][0], enemies[en][1] = enx, eny
 
-            angle = angle2p(posx, posy, enx, eny)
+            angle = calculate_angle(pos_x, pos_y, enx, eny)
             angle2 = (rot - angle) % (2 * np.pi)
             if angle2 > 10.5 * np.pi / 6 or angle2 < 1.5 * np.pi / 6:
                 dir2p = ((enemies[en][6] - angle - 3 * np.pi / 4) % (2 * np.pi)) / (np.pi / 2)
-                dist2p = np.sqrt((enx - posx) ** 2 + (eny - posy) ** 2 + 1e-16)
+                dist2p = np.sqrt((enx - pos_x) ** 2 + (eny - pos_y) ** 2 + 1e-16)
                 enemies[en][2] = angle2
                 enemies[en][7] = dir2p
-                if vision(enx, eny, posx, posy, dist2p, maph, size):
+                if check_visibility(enx, eny, pos_x, pos_y, dist2p, maph, size):
                     enemies[en][3] = 1 / dist2p
 
     enemies = enemies[enemies[:, 3].argsort()]
     return enemies
 
 
-def spawn_enemies(number, maph, msize, posx, posy, level=0):
+def spawn_enemies(number, maph, msize, pos_x, pos_y, level=0):
     enemies = []
     for i in range(number):
         x, y = np.random.randint(1, msize - 2), np.random.randint(1, msize - 2)
-        while maph[x][y] or (x == int(posx) and y == int(posy)):
+        while maph[x][y] or (x == int(pos_x) and y == int(pos_y)):
             x, y = np.random.randint(1, msize - 2), np.random.randint(1, msize - 2)
         x, y = x + 0.5, y + 0.5
-        angle2p, invdist2p, dir2p = 0, 1, 0  # angle, inv dist, dir2p relative to player
+        calculate_angle, invdist2p, dir2p = 0, 1, 0  # angle, inv dist, dir2p relative to player
         entype = np.random.choice([0, 1])  # 0 zombie, 1 skeleton
         direction = np.random.uniform(0, 2 * np.pi)  # facing direction
         size = np.random.uniform(7, 10)
@@ -638,7 +640,7 @@ def spawn_enemies(number, maph, msize, posx, posy, level=0):
         state = np.random.randint(0, 3)  # 0 normal, 1 aggressive, 2 defensive
         cooldown = 0  # atack cooldown
         #                       0, 1,       2,         3,      4,    5,         6,     7,      8,     9,       10
-        enemies.append([x, y, angle2p, invdist2p, entype, size, direction, dir2p, health, state, cooldown])
+        enemies.append([x, y, calculate_angle, invdist2p, entype, size, direction, dir2p, health, state, cooldown])
     return np.asarray(enemies)
 
 
@@ -666,7 +668,7 @@ def get_sprites(level):
 
 
 def draw_sprites(surf, sprites, enemies, spsize, hres, halfvres, ticks, sword, swordsp, rotv):
-    # enemies : x, y, angle2p, dist2p, type, size, direction, dir2p
+    # enemies : x, y, calculate_angle, dist2p, type, size, direction, dir2p
     offset = int(rotv * halfvres)
     cycle = int(ticks) % 3  # animation cycle for monsters
     for en in range(len(enemies)):
@@ -690,12 +692,12 @@ def draw_sprites(surf, sprites, enemies, spsize, hres, halfvres, ticks, sword, s
     return surf, en - 1
 
 
-def draw_colonel(surf, colonel, posx, posy, enx, eny, hres, halfvres, rot, rotv, maph, size):
-    angle = angle2p(posx, posy, enx, eny)
+def draw_colonel(surf, colonel, pos_x, pos_y, enx, eny, hres, halfvres, rot, rotv, maph, size):
+    angle = calculate_angle(pos_x, pos_y, enx, eny)
     angle2 = (rot - angle) % (2 * np.pi)
     if angle2 > 10.5 * np.pi / 6 or angle2 < 1.5 * np.pi / 6:
-        dist2p = np.sqrt((enx - posx) ** 2 + (eny - posy) ** 2 + 1e-16)
-        if vision(enx, eny, posx, posy, dist2p, maph, size):
+        dist2p = np.sqrt((enx - pos_x) ** 2 + (eny - pos_y) ** 2 + 1e-16)
+        if check_visibility(enx, eny, pos_x, pos_y, dist2p, maph, size):
             offset = int(rotv * halfvres)
             cos2 = np.cos(angle2)
             spsize = np.asarray(colonel.get_size())
